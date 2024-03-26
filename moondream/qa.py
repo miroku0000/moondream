@@ -1,4 +1,3 @@
-
 import os
 from moondream import Moondream, detect_device, LATEST_REVISION
 from transformers import AutoTokenizer
@@ -49,7 +48,7 @@ for root, dirs, files in os.walk(directory):
                 people_count = int(answers[0])
                 nudity_score = answers[1].lower()
                 medieval_era = answers[2].lower()
-                unusual_limbs = answers[3].lower()
+                #unusual_limbs = answers[3].lower()
 
                 print(f"File: {file_path}")
                 print(f"Number of people: {people_count}")
