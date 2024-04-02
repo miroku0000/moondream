@@ -4,15 +4,29 @@ from moondream import Moondream, detect_device, LATEST_REVISION
 from transformers import AutoTokenizer
 from PIL import Image
 import shutil
-
+import re
 import os
 import shutil
+
+
+def extract_height(string):
+    print("extracting height from string " + string)
+    # Define the regular expression pattern to match integers or floating-point numbers
+    pattern = r"\d+(?:\.\d+)?"
+    # Search for the pattern in the string
+    match = re.search(pattern, string)
+    if match:
+        # Extract and return the matched number
+        return float(match.group()) if '.' in match.group() else int(match.group())
+    else:
+        # If no match found, return None or handle as needed
+        return None
 
 def delete_empty_subdirectories(root_dir):
     # Walk through all directories and subdirectories in the root_dir
     for dirpath, dirnames, filenames in os.walk(root_dir, topdown=False):
         # Check if the directory is empty
-        if not any(filenames):
+        if not any(filenames) and "_" in dirpath:
             # Delete the empty directory
             shutil.rmtree(dirpath)
             print(f"Deleted empty directory: {dirpath}")
@@ -117,16 +131,18 @@ for root, dirs, files in os.walk(directory):
                 print(desc)
 
                 prompts = [
-                    #"Answer with an integer only: how many people are in the picture?",
+                    "Answer with an integer only: how many people are in the picture?",
                     "Answer yes or no: is everyone wearing a top?",
                     #"Answer only yes or no: could this be from the medieval era?",
                     #"Answer only male or female: What is the gender of the person in the picture",
                     "On a scale of 1-10, how much does this look like a single person who is a " + desc,
+                    #"Answer Yes or no, is there only 1 person in the picture?",
+                    "Answer as an integer: what is the height of the person rounded to the nearest foot in feet?"
                     ]
                 if "dwarf" in desc:
                     prompts.append("Answer yes or no: does this person have a beard?")
-                if "dwarf" in desc:
-                    prompts.append("Answer yes or no: Is this person over 1 foot tall?")
+                # if "dwarf" in desc:
+                #     prompts.append("Answer yes or no: Is this person over 1 foot tall?")
 
 
                 images=[] 
@@ -149,8 +165,8 @@ for root, dirs, files in os.walk(directory):
 
                 # Extract answers
                 index=0
-                #people_count = int(answers[index])
-                #index=index+1
+                people_count = int(answers[index])
+                index=index+1
                 nudity_score = answers[index].lower()
                 index=index+1
                 #medieval_era = answers[index].lower()
@@ -159,26 +175,32 @@ for root, dirs, files in os.walk(directory):
                 #index=index+1
                 accuracy = int(answers[index].lower())
                 index=index+1
+                # onlyoneperson=answers[index].lower()
+                # index=index+1
+
+                heightinfeet = extract_height(answers[index])
+                index = index+1
                 if "dwarf" in desc:
                     beard = answers[index].lower()
                     index=index+1
-                if "dwarf" in desc:
-                    height = answers[index].lower()
-                    index=index+1
+                # if "dwarf" in desc:
+                #     height = answers[index].lower()
+                #     index=index+1
 
 
 
                 print(f"File: {file_path}")
-                #print(f"Number of people: {people_count}")
+                print(f"Number of people: {people_count}")
                 print(f"Is everyone wearing a top {nudity_score}")
                 #print(f"Medieval looking: {medieval_era}")
                 #print(f"gender: {gender}")
                 print(f"accuracy: {accuracy}")
                 #print(f"gender: {gender}")
+                #print(f"only one person: {onlyoneperson}")
+                
                 if "dwarf" in desc:
                     print(f"beard: {beard}")
-                    print(f"height: {height}")
-                
+                    # print(f"height: {height}")
                 
                 #print(f"Unusual number of legs/arms: {unusual_limbs}")
 
@@ -213,7 +235,7 @@ for root, dirs, files in os.walk(directory):
                     json_file_path = os.path.join(root, json_file)
                     if os.path.exists(json_file_path):
                         os.remove(json_file_path)
-                elif beard== "no" and "dwarf" in desc:
+                elif "dwarf" in desc and beard and beard == "no" :
                     print("Deleting due to no dwarfs without beards")
                     os.remove(file_path)
                     # Delete corresponding JSON file
@@ -221,23 +243,30 @@ for root, dirs, files in os.walk(directory):
                     json_file_path = os.path.join(root, json_file)
                     if os.path.exists(json_file_path):
                         os.remove(json_file_path)
-                elif height == "no" and "dwarf" in desc:
-                    print("Deleting due to no <1 foot tall  dwarfs")
+                elif heightinfeet is not None and heightinfeet <3 or heightinfeet >7:
+                    print("Deleting due to height <3 or >7")
                     os.remove(file_path)
                     # Delete corresponding JSON file
                     json_file = os.path.splitext(file)[0] + ".json"
                     json_file_path = os.path.join(root, json_file)
                     if os.path.exists(json_file_path):
                         os.remove(json_file_path)
-                
-                # elif people_count != 1:
-                #     print("Deleting the image because the number of people is not 1.")
+                # elif onlyoneperson == "no":
+                #     print("Deleting the image because there is more than one person")
                 #     os.remove(file_path)
                 #     # Delete corresponding JSON file
                 #     json_file = os.path.splitext(file)[0] + ".json"
                 #     json_file_path = os.path.join(root, json_file)
                 #     if os.path.exists(json_file_path):
                 #         os.remove(json_file_path)
+                elif people_count != 1:
+                    print("Deleting the image because the number of people is not 1.")
+                    os.remove(file_path)
+                    # Delete corresponding JSON file
+                    json_file = os.path.splitext(file)[0] + ".json"
+                    json_file_path = os.path.join(root, json_file)
+                    if os.path.exists(json_file_path):
+                        os.remove(json_file_path)
                 # elif medieval_era == "no":
                 #     print("Deleting the image because it does not like the right gender")
                 #     os.remove(file_path)
