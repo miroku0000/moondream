@@ -9,6 +9,40 @@ import os
 import shutil
 
 
+import json
+
+def load_json(filename):
+     with open(filename, 'r') as file:
+        data = json.load(file)
+        return data
+
+def lookup_answer(question, json_data):
+    if 'metadata' in json_data:
+        for metadata in json_data['metadata']:
+            if question in metadata:
+                return metadata[question]
+    return None
+
+def add_metadata(prompts, answers, filename):
+    # Read existing JSON file
+    with open(filename, 'r') as file:
+        data = json.load(file)
+    
+    # Create metadata dictionary
+    metadata = {}
+    for prompt, answer in zip(prompts, answers):
+        metadata[prompt] = answer
+    
+    # Add metadata to existing data
+    if 'metadata' not in data:
+        data['metadata'] = []
+    data['metadata'].append(metadata)
+    
+    # Write updated data back to JSON file
+    with open(filename, 'w') as file:
+        json.dump(data, file, indent=4)
+    return data
+
 def extract_height(string):
     print("extracting height from string " + string)
     # Define the regular expression pattern to match integers or floating-point numbers
@@ -129,32 +163,33 @@ for root, dirs, files in os.walk(directory):
                 image = Image.open(file_path)
                 desc = "Medieval " + os.path.basename(root).replace("_"," ")
                 print(desc)
+                questions={
+                            "people_count":"Answer with an integer only: how many people are in the picture?",
+                            "wearing_top":"Answer yes or no: is everyone wearing a top?",
+                            "accuracy":"On a scale of 1-10, how much does this look like a single person who is a " + desc,
+                            "heightinfeet": "Answer as an integer: what is the height of the person rounded to the nearest foot in feet?",
+                            "beard":"Answer yes or no: does this person have a beard?"
 
-                prompts = [
-                    "Answer with an integer only: how many people are in the picture?",
-                    "Answer yes or no: is everyone wearing a top?",
-                    #"Answer only yes or no: could this be from the medieval era?",
-                    #"Answer only male or female: What is the gender of the person in the picture",
-                    "On a scale of 1-10, how much does this look like a single person who is a " + desc,
-                    #"Answer Yes or no, is there only 1 person in the picture?",
-                    "Answer as an integer: what is the height of the person rounded to the nearest foot in feet?"
-                    ]
-                if "dwarf" in desc:
-                    prompts.append("Answer yes or no: does this person have a beard?")
-                # if "dwarf" in desc:
-                #     prompts.append("Answer yes or no: Is this person over 1 foot tall?")
+                        }
 
-
+                question_order=["people_count","wearing_top", "accuracy", "heightinfeet","beard"]
+                src_json = os.path.splitext(file_path)[0] + '.json'
+                json_data = load_json(src_json)
+                for k in questions:
+                    if lookup_answer(questions[k], json_data) is not None:
+                        question_order.remove(k) 
+                prompts = []
+                for q in question_order:
+                        prompts.append(questions[q])                                                       
                 images=[] 
                 while len(images) < len(prompts):
                     images.append(image)
-
-                answers = moondream.batch_answer(
-                    images=images,
-                    prompts=prompts,
-                    tokenizer=tokenizer,
-                )
-
+                if len(prompts)>0:
+                    answers = moondream.batch_answer(
+                        images=images,
+                        prompts=prompts,
+                        tokenizer=tokenizer,
+                    )
                 end_time = time.time()
                 processing_time = end_time - start_time
                 total_time += processing_time
@@ -162,49 +197,35 @@ for root, dirs, files in os.walk(directory):
 
                 print(f"Processing time for {file}: {processing_time} seconds")
                 print(f"Average processing time per image: {total_time / total_images} seconds")
+                json_data=add_metadata(prompts, answers,  src_json)
 
-                # Extract answers
-                index=0
-                people_count = int(answers[index])
-                index=index+1
-                nudity_score = answers[index].lower()
-                index=index+1
-                #medieval_era = answers[index].lower()
-                #index=index+1
-                #gender = answers[index].lower()
-                #index=index+1
-                accuracy = int(answers[index].lower())
-                index=index+1
-                # onlyoneperson=answers[index].lower()
-                # index=index+1
+                people_count = int(lookup_answer(questions["people_count"], json_data))
+                wearing_top = lookup_answer(questions["wearing_top"],json_data).lower()
+                accuracy = int(lookup_answer(questions["accuracy"],json_data))
+                heightinfeet = extract_height(lookup_answer(questions["heightinfeet"],json_data))
+                beard = lookup_answer(questions["beard"],json_data).lower()
 
-                heightinfeet = extract_height(answers[index])
-                index = index+1
-                if "dwarf" in desc:
-                    beard = answers[index].lower()
-                    index=index+1
-                # if "dwarf" in desc:
-                #     height = answers[index].lower()
-                #     index=index+1
+                # people_count = int(answers[question_order.index("people_count")])
+                # wearing_top = answers[question_order.index("wearing_top")].lower()
+                # accuracy = int(answers[question_order.index("accuracy")].lower())
+                # heightinfeet = extract_height(answers[question_order.index("heightinfeet")])
+                # beard = answers[question_order.index("beard")].lower()
 
-
-
+                
                 print(f"File: {file_path}")
                 print(f"Number of people: {people_count}")
-                print(f"Is everyone wearing a top {nudity_score}")
+                print(f"Is everyone wearing a top {wearing_top}")
                 #print(f"Medieval looking: {medieval_era}")
                 #print(f"gender: {gender}")
                 print(f"accuracy: {accuracy}")
                 #print(f"gender: {gender}")
                 #print(f"only one person: {onlyoneperson}")
-                
-                if "dwarf" in desc:
-                    print(f"beard: {beard}")
+                print(f"beard: {beard}")
                     # print(f"height: {height}")
                 
                 #print(f"Unusual number of legs/arms: {unusual_limbs}")
 
-                if nudity_score == "no":
+                if wearing_top == "no":
                     if "female" in root:
                         print("Moving the image and JSON file to NSFW directory.")
                         # Calculate NSFW directory based on the parent directory of the image
@@ -286,6 +307,8 @@ for root, dirs, files in os.walk(directory):
                 
                 else:
                     print("Image is safe.")
+                    src_json = os.path.splitext(file_path)[0] + '.json'  
+                    add_metadata(prompts, answers,  src_json)
                     sub_directory = os.path.basename(root)
                     output_directory = "../currated"
                     print("calling move_these_files (" + file + ", "  +output_directory + ", " + sub_directory)
