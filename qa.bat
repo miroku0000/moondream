@@ -1,1 +1,1 @@
-..\venv\Scripts\activate venv && python qa.py
+venv\Scripts\activate venv && python qa.py
