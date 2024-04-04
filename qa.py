@@ -7,7 +7,7 @@ import shutil
 import re
 import os
 import shutil
-
+import torch
 
 import json
 
@@ -68,11 +68,16 @@ def delete_empty_subdirectories(root_dir):
 # Specify the root directory
 root_directory = "../output"
 
-
+print("starting qa.py")
 
 
 device, dtype = detect_device()
+#begin debugging code
 
+#device = "cuda"
+#dtype = torch.float32 if device == "cpu" else torch.float16 # CPU doesn't support float16
+print("device = " +str(device))
+#end debugging code
 model_id = "vikhyatk/moondream2"
 tokenizer = AutoTokenizer.from_pretrained(model_id, revision=LATEST_REVISION)
 moondream = Moondream.from_pretrained(
@@ -323,3 +328,4 @@ for root, dirs, files in os.walk(directory):
         #move_files(input_directory, output_directory, sub_directory)
 
 delete_empty_subdirectories(root_directory)
+print("finishing qa.py")
